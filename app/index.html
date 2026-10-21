@@ -1,0 +1,915 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OpenDX</title>
+<style>
+:root{
+  --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2a2f3a; --text:#e7e9ee; --muted:#8a91a0;
+  --accent:#4f8cff; --accent2:#7c5cff; --ok:#3ecf8e; --warn:#f5a524; --bad:#ff5c5c;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+button,input,select{font:inherit;color:inherit}
+header{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+header h1{font-size:16px;margin:0 8px 0 0;font-weight:650;letter-spacing:.2px}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:var(--panel2);color:var(--muted);font-size:12px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--bad)}
+.dot.on{background:var(--ok)}
+.spacer{flex:1}
+.btn{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:7px 12px;cursor:pointer}
+.btn:hover{border-color:#3a4150}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.danger{border-color:#5a2a2a;color:#ffb4b4}
+.btn.small{padding:4px 9px;font-size:12px}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+#previewWrap{padding:14px 16px 4px}
+#strip{width:100%;height:34px;display:block;border-radius:8px;background:#000}
+.stats{display:flex;gap:14px;color:var(--muted);font-size:12px;padding:6px 16px 0;flex-wrap:wrap}
+main{display:grid;grid-template-columns:190px 1fr;gap:0;min-height:calc(100vh - 140px)}
+nav{border-right:1px solid var(--line);padding:12px 8px;display:flex;flex-direction:column;gap:2px}
+nav button{all:unset;cursor:pointer;padding:9px 12px;border-radius:8px;color:var(--muted)}
+nav button:hover{background:var(--panel)}
+nav button.active{background:var(--panel2);color:var(--text)}
+nav .sep{height:1px;background:var(--line);margin:8px 4px}
+section.panel{display:none;padding:16px 20px;max-width:880px}
+section.panel.active{display:block}
+h2{font-size:15px;margin:0 0 4px}
+p.hint{color:var(--muted);margin:0 0 14px;font-size:13px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+.row{display:flex;align-items:center;gap:12px;margin:8px 0;flex-wrap:wrap}
+.row label{min-width:130px;color:var(--muted)}
+.row input[type=range]{flex:1;min-width:160px;accent-color:var(--accent)}
+.row output{min-width:42px;text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
+input[type=color]{width:48px;height:32px;border:1px solid var(--line);border-radius:8px;background:none;padding:2px;cursor:pointer}
+input[type=number],select{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+input[type=number]{width:84px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.tile{all:unset;cursor:pointer;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.tile:hover{border-color:#3a4150}
+.tile.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.swatches{display:flex;gap:6px;flex-wrap:wrap}
+.swatch{width:28px;height:28px;border-radius:7px;border:1px solid var(--line);cursor:pointer}
+#monitor{width:100%;max-width:560px;aspect-ratio:16/10;display:block;background:#0a0b0e;border-radius:10px}
+#log{background:#0a0b0e;border-radius:8px;padding:8px;height:160px;overflow:auto;font:12px/1.4 ui-monospace,Consolas,monospace;color:#b9c0cc;white-space:pre-wrap}
+.banner{margin:12px 16px 0;padding:10px 14px;border-radius:10px;background:#3a2a10;color:#ffd9a0;display:none}
+.warn{color:var(--warn);font-size:12px}
+kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:0 5px;font-size:12px}
+@media (max-width:720px){main{grid-template-columns:1fr}nav{flex-direction:row;flex-wrap:wrap;border-right:0;border-bottom:1px solid var(--line)}}
+</style>
+</head>
+<body>
+<header>
+  <h1>OpenDX</h1>
+  <span class="pill"><span class="dot" id="connDot"></span><span id="connText">Not connected</span></span>
+  <span class="pill" id="devInfo" hidden></span>
+  <span class="spacer"></span>
+  <button class="btn" id="powerBtn" title="Turn the strip off/on">⏻ On</button>
+  <button class="btn primary" id="connectBtn">Connect</button>
+</header>
+<div class="banner" id="noSerial">This browser has no Web Serial support. Open the app in <b>Microsoft Edge</b> or <b>Google Chrome</b> (use "Start OpenDX.bat").</div>
+
+<div id="previewWrap"><canvas id="strip" height="34"></canvas></div>
+<div class="stats"><span id="statFps">0 fps sent</span><span id="statBytes">0 B/frame</span><span id="statMode"></span></div>
+
+<main>
+  <nav id="nav">
+    <button data-mode="static">Static color</button>
+    <button data-mode="gradient">Gradient</button>
+    <button data-mode="effects">Effects</button>
+    <button data-mode="music">Music</button>
+    <button data-mode="screen">Screen sync</button>
+    <div class="sep"></div>
+    <button data-tab="hardware">Hardware modes</button>
+    <button data-tab="settings">Settings</button>
+  </nav>
+
+  <div>
+    <!-- STATIC -->
+    <section class="panel" id="p-static">
+      <h2>Static color</h2>
+      <p class="hint">One color for the whole strip.</p>
+      <div class="card">
+        <div class="row"><label>Color</label><input type="color" data-k="color"></div>
+        <div class="row"><label>Presets</label><div class="swatches" id="swatches"></div></div>
+      </div>
+    </section>
+
+    <!-- GRADIENT -->
+    <section class="panel" id="p-gradient">
+      <h2>Gradient</h2>
+      <p class="hint">Blend between colors along the strip, optionally flowing.</p>
+      <div class="card">
+        <div class="row"><label>Colors</label>
+          <input type="color" data-k="grad1"><input type="color" data-k="grad2"><input type="color" data-k="grad3">
+          <label style="min-width:0"><input type="checkbox" data-k="grad3on"> use 3rd</label>
+        </div>
+        <div class="row"><label>Flow</label><label style="min-width:0"><input type="checkbox" data-k="gradAnim"> animate (uses Speed)</label></div>
+      </div>
+    </section>
+
+    <!-- EFFECTS -->
+    <section class="panel" id="p-effects">
+      <h2>Effects</h2>
+      <p class="hint">Animations rendered here and streamed to the strip, so anything is possible.</p>
+      <div class="card"><div class="grid" id="effectGrid"></div></div>
+      <div class="card">
+        <div class="row"><label>Color 1</label><input type="color" data-k="eff1"><label style="min-width:0">Color 2</label><input type="color" data-k="eff2"></div>
+      </div>
+    </section>
+
+    <!-- MUSIC -->
+    <section class="panel" id="p-music">
+      <h2>Music</h2>
+      <p class="hint">Choose where the sound comes from.</p>
+      <div class="card">
+        <div class="row"><label>Audio source</label>
+          <select data-k="musicSrc" id="musicSrc">
+            <option value="pc">PC audio → effects in this app → USB (recommended)</option>
+            <option value="device">Controller's own built-in microphone</option>
+            <option value="pcdevice">PC audio → controller's own music effects (experimental)</option>
+            <option value="mic">PC microphone → effects in this app → USB</option>
+          </select>
+        </div>
+        <div class="row">
+          <button class="btn primary" id="musicStart">Start</button>
+          <button class="btn danger" id="musicStop" disabled>Stop</button>
+          <span class="pill" id="musicState">Stopped</span>
+        </div>
+        <p class="hint" id="musicHint" style="margin:6px 0 0"></p>
+      </div>
+      <div id="musicAppOpts">
+        <div class="card"><div class="grid" id="musicGrid"></div></div>
+        <div class="card">
+          <div class="row"><label>Sensitivity</label><input type="range" min="10" max="200" data-k="sens"><output data-o="sens"></output></div>
+          <div class="row"><label>Color</label><input type="color" data-k="musicColor"><label style="min-width:0"><input type="checkbox" data-k="musicRainbow"> rainbow colors</label></div>
+          <div class="row"><label>Layout</label><label style="min-width:0"><input type="checkbox" data-k="musicMirror"> mirror (bass at both ends)</label></div>
+        </div>
+      </div>
+      <div class="card" id="musicDevOpts">
+        <div class="row"><label>Controller effect #</label>
+          <input type="number" min="0" max="255" data-k="devMusicIdx">
+          <button class="btn small" id="devMusicPrev">◀</button><button class="btn small" id="devMusicNext">▶</button>
+          <span class="hint" style="margin:0">step through the controller's built-in music effects</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN -->
+    <section class="panel" id="p-screen">
+      <h2>Screen sync</h2>
+      <p class="hint">Pick the screen to mirror. Then match the LED layout below to how the strip is mounted behind your monitor.</p>
+      <div class="card">
+        <div class="row">
+          <button class="btn primary" id="screenStart">Choose screen</button>
+          <button class="btn danger" id="screenStop" disabled>Stop</button>
+          <span class="pill" id="screenState">Not capturing</span>
+        </div>
+        <div class="row"><label>Style</label>
+          <select data-k="syncStyle"><option value="edges">Edges (ambilight)</option><option value="average">Whole screen average</option></select>
+        </div>
+        <div class="row"><label>Smoothing</label><input type="range" min="0" max="95" data-k="smooth"><output data-o="smooth"></output></div>
+        <div class="row"><label>Saturation boost</label><input type="range" min="0" max="100" data-k="satBoost"><output data-o="satBoost"></output></div>
+        <div class="row"><label>Edge depth %</label><input type="range" min="3" max="40" data-k="depth"><output data-o="depth"></output></div>
+        <div class="row"><label>Black cutoff</label><input type="range" min="0" max="60" data-k="blackCut"><output data-o="blackCut"></output></div>
+      </div>
+      <div class="card">
+        <canvas id="monitor" width="560" height="350"></canvas>
+        <p class="hint" style="margin-top:8px">Number <b>1</b> marks the first LED (where the cable enters). Use a test to check: <button class="btn small" id="testFirst">Light LEDs 1–5 white</button></p>
+        <div class="row"><label>LEDs per side</label>
+          Left <input type="number" min="0" max="253" data-k="L.left">
+          Top <input type="number" min="0" max="253" data-k="L.top">
+          Right <input type="number" min="0" max="253" data-k="L.right">
+          Bottom <input type="number" min="0" max="253" data-k="L.bottom">
+        </div>
+        <div class="row"><label>First LED at</label>
+          <select data-k="L.start"><option value="bl">Bottom-left</option><option value="tl">Top-left</option><option value="tr">Top-right</option><option value="br">Bottom-right</option></select>
+          <select data-k="L.dir"><option value="cw">Clockwise</option><option value="ccw">Counter-clockwise</option></select>
+          <span class="muted" style="color:var(--muted)">(as seen from the front)</span>
+        </div>
+        <div class="row"><label>Auto layout</label>
+          <button class="btn small" id="auto3">3 sides (L/T/R)</button>
+          <button class="btn small" id="auto4">4 sides</button>
+          <span id="layoutWarn" class="warn"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- HARDWARE -->
+    <section class="panel" id="p-hardware">
+      <h2>Hardware modes (experimental)</h2>
+      <p class="hint">These commands make the controller run its <b>own</b> built-in effects, so this app stops streaming. The value ranges are guesses from DX Light's code. Try values and tell me what each one does.</p>
+      <div class="card">
+        <div class="row"><label>Built-in effect</label>
+          type <input type="number" min="0" max="255" id="hwType" value="2">
+          index <input type="number" min="0" max="255" id="hwIndex" value="0">
+          <button class="btn primary" id="hwEffect">Run</button>
+          <button class="btn small" id="hwPrev">◀ index</button><button class="btn small" id="hwNext">index ▶</button>
+        </div>
+        <div class="row"><label>Brightness</label><input type="range" min="0" max="100" value="100" id="hwBright"><output id="hwBrightO">100</output></div>
+        <div class="row"><label>Speed</label><input type="range" min="0" max="100" value="50" id="hwSpeed"><output id="hwSpeedO">50</output></div>
+        <div class="row"><label>Sound sensitivity</label><input type="range" min="0" max="100" value="50" id="hwSens"><output id="hwSensO">50</output></div>
+        <div class="row"><button class="btn danger" id="hwOff">Turn off (hardware)</button><button class="btn" id="hwResume">Back to app control</button></div>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="panel" id="p-settings">
+      <h2>Settings</h2>
+      <p class="hint">Saved in this browser.</p>
+      <div class="card">
+        <div class="row"><label>Brightness</label><input type="range" min="0" max="100" data-k="brightness"><output data-o="brightness"></output></div>
+        <div class="row"><label>Speed (effects)</label><input type="range" min="1" max="100" data-k="speed"><output data-o="speed"></output></div>
+        <div class="row"><label>Frames per second</label><input type="range" min="1" max="60" data-k="fps"><output data-o="fps"></output></div>
+        <div class="row"><label>Number of LEDs</label><input type="number" min="1" max="253" data-k="ledCount"><span class="hint" style="margin:0">read from the device on connect</span></div>
+        <div class="row"><label>Color order</label>
+          <select data-k="order"><option>RGB</option><option>GRB</option><option>BRG</option><option>RBG</option><option>GBR</option><option>BGR</option></select>
+          <span class="hint" style="margin:0">if red shows as green, change this</span>
+        </div>
+        <div class="row"><label>Reverse strip</label><input type="checkbox" data-k="reverse"></div>
+        <div class="row"><label>Send method</label>
+          <select data-k="transport"><option value="SC">Fast frame ("SC", firmware &gt; 1.0.2)</option><option value="RB">Chunks ("RB", older firmware)</option></select>
+        </div>
+        <div class="row"><label>Debug log</label><input type="checkbox" data-k="log"><button class="btn small" id="readInfo">Read device info</button></div>
+        <div id="log"></div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+"use strict";
+// ---------- settings ----------
+const DEFAULTS = {
+  mode: "effects", tab: null, color: "#ff2a6d", grad1: "#ff0080", grad2: "#00c8ff", grad3: "#ffd000", grad3on: false, gradAnim: true,
+  effect: "rainbowWave", eff1: "#00aaff", eff2: "#ff0066", music: "spectrum", musicSrc: "pc", devMusicIdx: 0, sens: 100, musicColor: "#ff2a6d", musicRainbow: true, musicMirror: true,
+  syncStyle: "edges", smooth: 40, satBoost: 25, depth: 12, blackCut: 12,
+  L: { left: 16, top: 31, right: 16, bottom: 0, start: "bl", dir: "cw" },
+  brightness: 100, speed: 50, fps: 30, ledCount: 63, order: "RGB", reverse: false, transport: "SC", log: false, power: true,
+};
+function loadSettings() {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem("ledctl") || "{}"); } catch {}
+  const s = Object.assign({}, DEFAULTS, saved);
+  s.L = Object.assign({}, DEFAULTS.L, saved.L || {});
+  return s;
+}
+const S = loadSettings();
+let saveTimer = null;
+function save() { clearTimeout(saveTimer); saveTimer = setTimeout(() => { try { localStorage.setItem("ledctl", JSON.stringify(S)); } catch {} }, 300); }
+
+// ---------- helpers ----------
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => [...document.querySelectorAll(s)];
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const hex2rgb = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+const hsv = (h, s = 1, v = 1) => {
+  h = ((h % 1) + 1) % 1; const i = Math.floor(h * 6), f = h * 6 - i, p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
+  const m = [[v, t, p], [q, v, p], [p, v, t], [p, q, v], [t, p, v], [v, p, q]][i % 6];
+  return [m[0] * 255, m[1] * 255, m[2] * 255];
+};
+const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+const scale = (c, k) => [c[0] * k, c[1] * k, c[2] * k];
+const fill = (n, c) => Array.from({ length: n }, () => c);
+const hexStr = (a) => Array.from(a, (b) => b.toString(16).padStart(2, "0")).join(" ");
+const getPath = (o, p) => p.split(".").reduce((x, k) => x[k], o);
+const setPath = (o, p, v) => { const ks = p.split("."); const last = ks.pop(); ks.reduce((x, k) => x[k], o)[last] = v; };
+
+function log(msg) {
+  if (!S.log) return;
+  const el = $("#log");
+  el.textContent += msg + "\n";
+  const lines = el.textContent.split("\n");
+  if (lines.length > 200) el.textContent = lines.slice(-200).join("\n");
+  el.scrollTop = el.scrollHeight;
+}
+
+// ---------- protocol (recovered from DX Light) ----------
+let seq = 1;
+const nextSeq = () => (seq = seq >= 254 ? 1 : seq + 1);
+const sum8 = (buf, len) => { let s = 0; for (let i = 0; i < len; i++) s += buf[i]; return s & 255; };
+function rbFrame(action, payload = []) {
+  const len = 6 + payload.length, b = new Uint8Array(len);
+  b[0] = 0x52; b[1] = 0x42; b[2] = len; b[3] = nextSeq(); b[4] = action; b.set(payload, 5); b[len - 1] = sum8(b, len - 1);
+  return b;
+}
+function scFrame(groups) {
+  const len = 7 + groups.length, b = new Uint8Array(len);
+  b[0] = 0x53; b[1] = 0x43; b[2] = len >> 8; b[3] = len & 255; b[4] = nextSeq(); b[5] = 0x80; b.set(groups, 6); b[len - 1] = sum8(b, len - 1);
+  return b;
+}
+// Colors -> [start, r, g, b, end] groups. Runs of identical LEDs become one group.
+function toGroups(rgb, n) {
+  const g = [];
+  let start = 0;
+  for (let i = 1; i <= n; i++) {
+    const same = i < n && rgb[i * 3] === rgb[start * 3] && rgb[i * 3 + 1] === rgb[start * 3 + 1] && rgb[i * 3 + 2] === rgb[start * 3 + 2];
+    if (!same) { g.push(start + 1, rgb[start * 3], rgb[start * 3 + 1], rgb[start * 3 + 2], i); start = i; }
+  }
+  return g;
+}
+const ACT = { readInfo: 0x82, setLedEffect: 0x85, setSection: 0x86, brightness: 0x87, speed: 0x8a, soundSens: 0x8b, off: 0x97, computerRhythm: 0x98 };
+const MUSIC_EFFECT_TYPE = 3; // DX Light's effectType for music ("rhythm") effects
+
+// ---------- serial device ----------
+const FILTER = { usbVendorId: 0x1a86, usbProductId: 0xfe0c };
+const dev = {
+  port: null, writer: null, reader: null, rx: [], q: Promise.resolve(), info: null,
+  get connected() { return !!this.writer; },
+  async open(port) {
+    await port.open({ baudRate: 115200, dataBits: 8, stopBits: 1, parity: "none", bufferSize: 4096 });
+    try { await port.setSignals({ dataTerminalReady: true }); } catch {}
+    this.port = port; this.writer = port.writable.getWriter(); this.readLoop();
+  },
+  async readLoop() {
+    const reader = this.port.readable.getReader(); this.reader = reader;
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        for (const b of value) this.rx.push(b);
+        if (this.rx.length > 4096) this.rx.splice(0, this.rx.length - 4096);
+        log("RX " + hexStr(value));
+      }
+    } catch {} finally { try { reader.releaseLock(); } catch {} }
+  },
+  send(bytes) {
+    if (!this.writer) return Promise.resolve();
+    if (bytes.length <= 64) log("TX " + hexStr(bytes)); else log(`TX ${hexStr(bytes.slice(0, 24))} … (${bytes.length} bytes)`);
+    this.q = this.q.then(() => this.writer && this.writer.write(bytes)).catch((e) => { log("write error " + e); });
+    return this.q;
+  },
+  async readInfo() {
+    this.rx = [];
+    await this.send(rbFrame(ACT.readInfo));
+    await sleep(300);
+    const r = this.rx.slice();
+    if (r.length >= 24 && r[0] === 0x52 && r[1] === 0x42 && r[4] === 0x82) {
+      return { id: hexStr(r.slice(5, 8)).replace(/ /g, ""), display: r[8], leds: r[11], fw: `${r[21]}.${r[22]}.${r[23]}`, fwNum: r[21] * 10000 + r[22] * 100 + r[23] };
+    }
+    return null;
+  },
+  async close() {
+    const p = this.port;
+    this.writer && this.writer.releaseLock(); this.writer = null;
+    try { await this.reader?.cancel(); } catch {}
+    try { await p?.close(); } catch {}
+    this.port = null;
+  },
+};
+
+async function connect(port) {
+  try {
+    await dev.open(port);
+  } catch (e) {
+    setConn(false, String(e.message || e).includes("open") ? "Port busy. Is DX Light still running?" : "Could not open: " + e.message);
+    return;
+  }
+  paused = true;
+  const info = await dev.readInfo();
+  paused = false;
+  dev.info = info;
+  if (info) {
+    if (info.leds > 0 && info.leds < 254) S.ledCount = info.leds;
+    S.transport = info.fwNum > 10002 ? "SC" : "RB";
+    $("#devInfo").hidden = false;
+    $("#devInfo").textContent = `${info.leds} LEDs · fw ${info.fw}`;
+    syncInputs(); save();
+  }
+  setConn(true, "Connected (COM)");
+  lastKey = "";
+}
+function setConn(on, text) {
+  $("#connDot").classList.toggle("on", on);
+  $("#connText").textContent = text;
+  $("#connectBtn").textContent = on ? "Disconnect" : "Connect";
+  if (!on) $("#devInfo").hidden = true;
+}
+
+// ---------- effects ----------
+const rnd = Math.random;
+const EFFECTS = {
+  rainbowWave: { name: "Rainbow wave", render: ({ N, t, sp }) => Array.from({ length: N }, (_, i) => hsv(i / N - t * 0.2 * sp)) },
+  rainbowCycle: { name: "Rainbow cycle", render: ({ N, t, sp }) => fill(N, hsv(t * 0.08 * sp)) },
+  breathing: { name: "Breathing", render: ({ N, t, sp, c1 }) => { const k = (1 - Math.cos(t * sp * 1.6)) / 2; return fill(N, scale(c1, 0.03 + 0.97 * k * k)); } },
+  colorFade: { name: "Color fade", render: ({ N, t, sp, c1, c2 }) => { const pal = [c1, c2, hsv(0), hsv(1 / 3), hsv(2 / 3)]; const x = t * 0.25 * sp, i = Math.floor(x) % pal.length, f = x % 1; return fill(N, mix(pal[i], pal[(i + 1) % pal.length], f * f * (3 - 2 * f))); } },
+  wipe: { name: "Color wipe", render: ({ N, t, sp, c1, c2 }) => { const p = (t * 25 * sp) % (2 * N); return Array.from({ length: N }, (_, i) => (p < N ? (i < p ? c1 : c2) : (i < p - N ? c2 : c1))); } },
+  comet: { name: "Comet", render: ({ N, t, sp, c1, c2 }) => { const head = (t * 22 * sp) % N, tail = Math.max(4, N / 5); return Array.from({ length: N }, (_, i) => { const d = (head - i + N) % N; const k = d < tail ? Math.pow(1 - d / tail, 2) : 0; return mix(scale(c2, 0.04), c1, k); }); } },
+  dualComet: { name: "Dual comet", render: ({ N, t, sp, c1, c2 }) => { const h1 = (t * 18 * sp) % N, h2 = (N - h1) % N, tail = Math.max(4, N / 6); return Array.from({ length: N }, (_, i) => { const d1 = (h1 - i + N) % N, d2 = (i - h2 + N) % N; const k1 = d1 < tail ? (1 - d1 / tail) ** 2 : 0, k2 = d2 < tail ? (1 - d2 / tail) ** 2 : 0; return [Math.min(255, c1[0] * k1 + c2[0] * k2), Math.min(255, c1[1] * k1 + c2[1] * k2), Math.min(255, c1[2] * k1 + c2[2] * k2)]; }); } },
+  chase: { name: "Theater chase", render: ({ N, t, sp, c1, c2 }) => { const o = Math.floor(t * 8 * sp); return Array.from({ length: N }, (_, i) => ((i + o) % 3 === 0 ? c1 : scale(c2, 0.08))); } },
+  scanner: { name: "Scanner", render: ({ N, t, sp, c1 }) => { const p = (Math.sin(t * sp * 1.5) * 0.5 + 0.5) * (N - 1); return Array.from({ length: N }, (_, i) => scale(c1, Math.max(0, 1 - Math.abs(i - p) / 3.5) ** 1.5)); } },
+  twinkle: {
+    name: "Stars", init: (N) => ({ lv: new Float32Array(N), hue: new Float32Array(N) }),
+    render: ({ N, dt, sp, c1, st }) => {
+      const out = [];
+      for (let i = 0; i < N; i++) {
+        st.lv[i] *= Math.exp(-dt * 2.2 * sp);
+        if (st.lv[i] < 0.02 && rnd() < dt * 0.9 * sp) { st.lv[i] = 1; st.hue[i] = rnd(); }
+        out.push(mix(scale(c1, 0.03), mix([255, 255, 255], hsv(st.hue[i], 0.5), 0.5), st.lv[i]));
+      }
+      return out;
+    },
+  },
+  sparkle: {
+    name: "Sparkle", init: (N) => ({ lv: new Float32Array(N) }),
+    render: ({ N, dt, sp, c1, st }) => { const out = []; for (let i = 0; i < N; i++) { st.lv[i] *= Math.exp(-dt * 10); if (rnd() < dt * 0.6 * sp) st.lv[i] = 1; out.push(mix(scale(c1, 0.35), [255, 255, 255], st.lv[i])); } return out; },
+  },
+  fire: {
+    name: "Fire", init: (N) => ({ heat: new Float32Array(Math.ceil(N / 2) + 1), acc: 0 }),
+    render: ({ N, dt, sp, st }) => {
+      const H = st.heat, M = H.length;
+      st.acc += dt * 60 * sp;
+      while (st.acc >= 1) {
+        st.acc -= 1;
+        for (let i = 0; i < M; i++) H[i] = Math.max(0, H[i] - rnd() * ((55 * 10) / M + 2) / 255);
+        for (let i = M - 1; i >= 2; i--) H[i] = (H[i - 1] + 2 * H[i - 2]) / 3;
+        if (rnd() < 0.5) { const y = Math.floor(rnd() * 3); H[y] = Math.min(1, H[y] + 0.6 + rnd() * 0.4); }
+      }
+      const col = (h) => { const t = h * 3; return t < 1 ? [255 * t, 0, 0] : t < 2 ? [255, 255 * (t - 1), 0] : [255, 255, 255 * (t - 2)]; };
+      // Two flames: rising from both ends of the strip, meeting in the middle.
+      return Array.from({ length: N }, (_, i) => col(clamp(H[Math.min(i, N - 1 - i)] || 0, 0, 1)));
+    },
+  },
+  police: { name: "Police", render: ({ N, t, sp }) => { const ph = (t * sp * 1.2) % 1, half = ph < 0.5, strobe = Math.floor((ph % 0.5) * 12) % 2 === 0; return Array.from({ length: N }, (_, i) => (i < N / 2 ? (half && strobe ? [255, 0, 0] : [0, 0, 0]) : (!half && strobe ? [0, 40, 255] : [0, 0, 0]))); } },
+  aurora: { name: "Aurora", render: ({ N, t, sp, c1, c2 }) => Array.from({ length: N }, (_, i) => { const a = Math.sin(i * 0.13 + t * 0.5 * sp) + Math.sin(i * 0.051 - t * 0.33 * sp); const b = Math.sin(i * 0.09 - t * 0.27 * sp) * 0.5 + 0.5; return scale(mix(c1, c2, (a + 2) / 4), 0.25 + 0.75 * b); }) },
+  ocean: { name: "Ocean", render: ({ N, t, sp }) => Array.from({ length: N }, (_, i) => { const w = Math.sin(i * 0.2 - t * 1.1 * sp) * 0.5 + 0.5, w2 = Math.sin(i * 0.07 + t * 0.6 * sp) * 0.5 + 0.5; return mix([0, 20, 90], [0, 200, 220], w * w2); }) },
+  candle: {
+    name: "Candle", init: () => ({ v: 0.8, target: 0.8 }),
+    render: ({ N, dt, st }) => { if (rnd() < dt * 8) st.target = 0.55 + rnd() * 0.45; st.v += (st.target - st.v) * Math.min(1, dt * 12); return fill(N, scale([255, 120, 20], st.v)); },
+  },
+  ripple: {
+    name: "Ripples", init: () => ({ drops: [] }),
+    render: ({ N, t, dt, sp, c2, st }) => {
+      if (rnd() < dt * 0.8 * sp) st.drops.push({ x: rnd() * N, t0: t, hue: rnd() });
+      st.drops = st.drops.filter((d) => t - d.t0 < 3);
+      return Array.from({ length: N }, (_, i) => {
+        let c = scale(c2, 0.03);
+        for (const d of st.drops) { const r = (t - d.t0) * 14 * sp, dist = Math.abs(Math.abs(i - d.x) - r); if (dist < 2) c = mix(c, hsv(d.hue), (1 - dist / 2) * Math.max(0, 1 - (t - d.t0) / 3)); }
+        return c;
+      });
+    },
+  },
+};
+
+// ---------- music ----------
+const au = { ctx: null, an: null, freq: null, stream: null, peak: 0.2, bands: null, bassAvg: 0, lastBeat: 0, flash: 0, hue: 0, vu: 0, flow: null, feedDevice: false, lastFeed: 0, feedPeak: 0.2 };
+const MUSIC = {
+  spectrum: "Spectrum", pulse: "Bass pulse", vu: "VU meter", beat: "Beat flash", flow: "Energy flow",
+};
+const MUSIC_HINTS = {
+  pc: "The app captures what your PC is playing, builds the light show here and sends it over USB. In the dialog pick <b>Entire screen</b> and turn on <b>Share system audio</b>.",
+  device: "The controller runs its own music effects using the small microphone on the controller. Nothing is sent from the PC except the effect choice.",
+  pcdevice: "Sends the PC's loudness to the controller so its own music effects follow PC audio instead of its microphone. DX Light only does this for newer controllers (firmware 1.8.2+); yours reports 1.1.2, so it may be ignored. Tell me if the lights react.",
+  mic: "Uses a microphone on the PC (not the controller's) and builds the light show in this app.",
+};
+function updateMusicUi() {
+  const src = S.musicSrc;
+  $("#musicHint").innerHTML = MUSIC_HINTS[src];
+  $("#musicAppOpts").style.display = src === "pc" || src === "mic" ? "" : "none";
+  $("#musicDevOpts").style.display = src === "device" || src === "pcdevice" ? "" : "none";
+}
+async function startMusicSource() {
+  const src = S.musicSrc;
+  if (src === "pc") return startMusic("system");
+  if (src === "mic") return startMusic("mic");
+  if (src === "device") {
+    stopMusic();
+    setMode("hardware");
+    sendDeviceMusicEffect();
+    $("#musicState").textContent = dev.connected ? "Controller is listening with its own mic" : "Not connected";
+    $("#musicStop").disabled = false;
+    return;
+  }
+  // pcdevice: capture PC audio, but let the controller render its own music effect
+  await startMusic("system", true);
+  if (!au.an) return;
+  setMode("hardware");
+  sendDeviceMusicEffect();
+  au.feedDevice = true;
+  $("#musicState").textContent = "Feeding PC loudness to the controller";
+}
+function sendDeviceMusicEffect() {
+  if (dev.connected) dev.send(rbFrame(ACT.setLedEffect, [MUSIC_EFFECT_TYPE, S.devMusicIdx & 255]));
+}
+// Same command DX Light sends to newer controllers: effect index + loudness 0-100, every 50 ms.
+function feedDevice(now) {
+  if (now - au.lastFeed < 0.05) return;
+  au.lastFeed = now;
+  au.an.getByteFrequencyData(au.freq);
+  const v = bandLevel(40, 8000);
+  au.feedPeak = Math.max(v, au.feedPeak * 0.995, 0.1);
+  const level = clamp((v / au.feedPeak) * (S.sens / 100), 0, 1);
+  dev.send(rbFrame(ACT.computerRhythm, [S.devMusicIdx & 255, Math.round(level * 100)]));
+}
+async function startMusic(kind, keepMode = false) {
+  stopMusic();
+  try {
+    let stream;
+    if (kind === "system") {
+      stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }, systemAudio: "include" });
+      stream.getVideoTracks().forEach((t) => t.stop());
+    } else {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    }
+    const tracks = stream.getAudioTracks();
+    if (!tracks.length) { $("#musicState").textContent = "No audio shared. Tick \"Share system audio\" and try again"; return; }
+    au.stream = stream;
+    au.ctx = new AudioContext();
+    const src = au.ctx.createMediaStreamSource(new MediaStream(tracks));
+    au.an = au.ctx.createAnalyser(); au.an.fftSize = 2048; au.an.smoothingTimeConstant = 0.55;
+    src.connect(au.an);
+    au.freq = new Uint8Array(au.an.frequencyBinCount);
+    tracks[0].onended = stopMusic;
+    $("#musicState").textContent = kind === "system" ? "Listening to PC audio" : "Listening to microphone";
+    $("#musicStop").disabled = false;
+    if (!keepMode) setMode("music");
+  } catch (e) {
+    $("#musicState").textContent = "Cancelled / blocked: " + e.message;
+  }
+}
+function stopMusic() {
+  au.stream?.getTracks().forEach((t) => t.stop());
+  au.ctx?.close().catch(() => {});
+  au.stream = au.ctx = au.an = null;
+  au.feedDevice = false;
+  $("#musicState").textContent = "Stopped";
+  $("#musicStop").disabled = true;
+}
+function bandLevel(f0, f1) {
+  const hz = au.ctx.sampleRate / au.an.fftSize;
+  let a = Math.max(1, Math.floor(f0 / hz)), b = Math.max(a + 1, Math.ceil(f1 / hz)), s = 0, m = 0;
+  for (let i = a; i < b && i < au.freq.length; i++) { s += au.freq[i]; m = Math.max(m, au.freq[i]); }
+  return (0.5 * s / (b - a) + 0.5 * m) / 255;
+}
+function renderMusic(N, t, dt) {
+  if (!au.an) return fill(N, [0, 0, 0]);
+  au.an.getByteFrequencyData(au.freq);
+  const gain = S.sens / 100;
+  const B = S.musicMirror ? Math.ceil(N / 2) : N;
+  if (!au.bands || au.bands.length !== B) au.bands = new Float32Array(B);
+  let frameMax = 0;
+  for (let b = 0; b < B; b++) {
+    const f0 = 40 * Math.pow(14000 / 40, b / B), f1 = 40 * Math.pow(14000 / 40, (b + 1) / B);
+    const v = bandLevel(f0, f1);
+    frameMax = Math.max(frameMax, v);
+    au.bands[b] = v > au.bands[b] ? v : au.bands[b] * Math.exp(-dt * 6) + v * (1 - Math.exp(-dt * 6)); // fast attack, slow release
+  }
+  au.peak = Math.max(frameMax, au.peak * Math.exp(-dt * 0.25), 0.12); // auto gain
+  const norm = (v) => clamp((v / au.peak) * gain, 0, 1);
+  const bass = norm(bandLevel(30, 160));
+  const level = norm(bandLevel(40, 8000));
+  const base = hex2rgb(S.musicColor);
+  const colAt = (x) => (S.musicRainbow ? hsv(x * 0.8 + t * 0.02) : base);
+  const idx = (i) => (S.musicMirror ? Math.min(i, N - 1 - i) : i);
+
+  switch (S.music) {
+    case "pulse": {
+      const k = bass ** 1.6;
+      return fill(N, scale(S.musicRainbow ? hsv(t * 0.05) : base, 0.04 + 0.96 * k));
+    }
+    case "vu": {
+      au.vu = level > au.vu ? level : au.vu * Math.exp(-dt * 3);
+      const len = S.musicMirror ? N / 2 : N;
+      return Array.from({ length: N }, (_, i) => { const p = idx(i) / len; return p < au.vu ? (S.musicRainbow ? mix([0, 255, 60], [255, 0, 0], p) : base) : [0, 0, 0]; });
+    }
+    case "beat": {
+      au.bassAvg = au.bassAvg * 0.92 + bass * 0.08;
+      if (bass > au.bassAvg * 1.35 && bass > 0.25 && t - au.lastBeat > 0.15) { au.lastBeat = t; au.flash = 1; au.hue = (au.hue + 0.2 + rnd() * 0.4) % 1; }
+      au.flash *= Math.exp(-dt * 4);
+      return fill(N, scale(S.musicRainbow ? hsv(au.hue) : base, 0.05 + 0.95 * au.flash));
+    }
+    case "flow": {
+      if (!au.flow || au.flow.length !== N) au.flow = fill(N, [0, 0, 0]);
+      const steps = Math.max(1, Math.round(dt * 40));
+      const lo = norm(bandLevel(30, 200)), mid = norm(bandLevel(200, 2000)), hi = norm(bandLevel(2000, 12000));
+      const c = S.musicRainbow ? [255 * lo ** 1.4, 255 * mid ** 1.4, 255 * hi ** 1.4] : scale(base, level ** 1.4);
+      const half = Math.ceil(N / 2);
+      for (let s = 0; s < steps; s++) {
+        if (S.musicMirror) { for (let i = 0; i < half - 1; i++) au.flow[i] = au.flow[i + 1]; for (let i = N - 1; i > N - half; i--) au.flow[i] = au.flow[i - 1]; au.flow[half - 1] = c; au.flow[N - half] = c; }
+        else { for (let i = N - 1; i > 0; i--) au.flow[i] = au.flow[i - 1]; au.flow[0] = c; }
+      }
+      return au.flow.slice();
+    }
+    default: { // spectrum
+      return Array.from({ length: N }, (_, i) => { const b = Math.min(B - 1, Math.floor((idx(i) / (S.musicMirror ? N / 2 : N)) * B)); const v = norm(au.bands[b]); return scale(colAt(b / B), v ** 1.5); });
+    }
+  }
+}
+
+// ---------- screen sync ----------
+const SW = 128, SH = 72;
+const scr = { stream: null, canvas: null, ctx: null, video: null, reader: null, prev: null, rects: [], key: "" };
+async function startScreen() {
+  stopScreen();
+  try {
+    const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 30 } }, audio: false });
+    const track = stream.getVideoTracks()[0];
+    scr.stream = stream;
+    scr.canvas = document.createElement("canvas"); scr.canvas.width = SW; scr.canvas.height = SH;
+    scr.ctx = scr.canvas.getContext("2d", { willReadFrequently: true });
+    track.onended = stopScreen;
+    if ("MediaStreamTrackProcessor" in window) {
+      // Reads frames even when this window is minimized.
+      const reader = new MediaStreamTrackProcessor({ track }).readable.getReader();
+      scr.reader = reader;
+      (async () => {
+        while (true) {
+          const { value: frame, done } = await reader.read();
+          if (done) break;
+          scr.ctx?.drawImage(frame, 0, 0, SW, SH);
+          frame.close();
+        }
+      })().catch(() => {});
+    } else {
+      scr.video = document.createElement("video"); scr.video.muted = true; scr.video.srcObject = stream; await scr.video.play();
+    }
+    $("#screenState").textContent = "Capturing: " + (track.label || "screen");
+    $("#screenStop").disabled = false;
+    setMode("screen");
+  } catch (e) {
+    $("#screenState").textContent = "Cancelled / blocked: " + e.message;
+  }
+}
+function stopScreen() {
+  try { scr.reader?.cancel(); } catch {}
+  scr.stream?.getTracks().forEach((t) => t.stop());
+  scr.stream = scr.reader = scr.video = scr.ctx = null;
+  $("#screenState").textContent = "Not capturing";
+  $("#screenStop").disabled = true;
+}
+// Order of sides walking around the screen (as seen from the front).
+const SIDES = {
+  cw: { bl: ["left", "top", "right", "bottom"], tl: ["top", "right", "bottom", "left"], tr: ["right", "bottom", "left", "top"], br: ["bottom", "left", "top", "right"] },
+  ccw: { bl: ["bottom", "right", "top", "left"], br: ["right", "top", "left", "bottom"], tr: ["top", "left", "bottom", "right"], tl: ["left", "bottom", "right", "top"] },
+};
+function sidePoint(side, dir, u) { // u in 0..1 along walking direction -> normalized x,y on the edge
+  if (dir === "cw") return { left: [0, 1 - u], top: [u, 0], right: [1, u], bottom: [1 - u, 1] }[side];
+  return { left: [0, u], top: [1 - u, 0], right: [1, 1 - u], bottom: [u, 1] }[side];
+}
+function layoutLeds() {
+  const L = S.L, d = S.depth / 100, out = [];
+  for (const side of SIDES[L.dir][L.start]) {
+    const n = Math.max(0, L[side] | 0);
+    for (let k = 0; k < n; k++) {
+      const [cx, cy] = sidePoint(side, L.dir, (k + 0.5) / n), h = 0.5 / n;
+      const r = side === "left" ? [0, cy - h, d, cy + h] : side === "right" ? [1 - d, cy - h, 1, cy + h] : side === "top" ? [cx - h, 0, cx + h, d] : [cx - h, 1 - d, cx + h, 1];
+      out.push({ cx, cy, side, r });
+    }
+  }
+  return out;
+}
+function renderScreen(N) {
+  if (!scr.ctx) return fill(N, [0, 0, 0]);
+  if (scr.video) scr.ctx.drawImage(scr.video, 0, 0, SW, SH);
+  const img = scr.ctx.getImageData(0, 0, SW, SH).data;
+  const avg = (x0, y0, x1, y1) => {
+    x0 = clamp(Math.floor(x0 * SW), 0, SW - 1); x1 = clamp(Math.ceil(x1 * SW), x0 + 1, SW);
+    y0 = clamp(Math.floor(y0 * SH), 0, SH - 1); y1 = clamp(Math.ceil(y1 * SH), y0 + 1, SH);
+    let r = 0, g = 0, b = 0, c = 0;
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const o = (y * SW + x) * 4; r += img[o]; g += img[o + 1]; b += img[o + 2]; c++; }
+    return [r / c, g / c, b / c];
+  };
+  let raw;
+  if (S.syncStyle === "average") raw = fill(N, avg(0, 0, 1, 1));
+  else {
+    const leds = layoutLeds();
+    raw = Array.from({ length: N }, (_, i) => (leds[i] ? avg(...leds[i].r) : [0, 0, 0]));
+  }
+  const boost = 1 + S.satBoost / 50, cut = S.blackCut, a = 1 - S.smooth / 100;
+  if (!scr.prev || scr.prev.length !== N) scr.prev = raw;
+  const out = raw.map((c, i) => {
+    const gray = (c[0] + c[1] + c[2]) / 3;
+    let v = c.map((x) => clamp(gray + (x - gray) * boost, 0, 255));
+    if (Math.max(...v) < cut) v = [0, 0, 0];
+    return mix(scr.prev[i], v, a);
+  });
+  scr.prev = out;
+  return out;
+}
+function autoLayout(sides) {
+  const N = S.ledCount, ar = 16 / 9;
+  if (sides === 3) { const top = Math.round((N * ar) / (ar + 2)), left = Math.floor((N - top) / 2); Object.assign(S.L, { left, top, right: N - top - left, bottom: 0, start: "bl", dir: "cw" }); }
+  else { const top = Math.round((N * ar) / (2 * (1 + ar))), left = Math.floor((N - 2 * top) / 2); Object.assign(S.L, { left, top, right: N - 2 * top - left, bottom: top, start: "bl", dir: "cw" }); }
+  syncInputs(); save();
+}
+
+// ---------- render loop ----------
+let paused = false, override = null, lastKey = "", lastSendT = 0, sentFrames = 0, sentBytes = 0, lastT = performance.now() / 1000, effState = {}, current = [];
+const ORDERS = { RGB: [0, 1, 2], GRB: [1, 0, 2], BRG: [2, 0, 1], RBG: [0, 2, 1], GBR: [1, 2, 0], BGR: [2, 1, 0] };
+
+function renderFrame(N, t, dt) {
+  if (override) return override(N);
+  switch (S.mode) {
+    case "static": return fill(N, hex2rgb(S.color));
+    case "gradient": {
+      const cs = [hex2rgb(S.grad1), hex2rgb(S.grad2)]; if (S.grad3on) cs.push(hex2rgb(S.grad3));
+      const sh = S.gradAnim ? t * 0.08 * spd() : 0;
+      return Array.from({ length: N }, (_, i) => {
+        let x = (i / N + sh) % 1; x = x < 0.5 ? x * 2 : 2 - x * 2; // mirrored so it loops seamlessly
+        const p = x * (cs.length - 1), k = Math.min(cs.length - 2, Math.floor(p));
+        return mix(cs[k], cs[k + 1], p - k);
+      });
+    }
+    case "effects": {
+      const fx = EFFECTS[S.effect] || EFFECTS.rainbowWave;
+      if (effState.name !== S.effect || effState.N !== N) effState = { name: S.effect, N, st: fx.init ? fx.init(N) : null };
+      return fx.render({ N, t, dt, sp: spd(), c1: hex2rgb(S.eff1), c2: hex2rgb(S.eff2), st: effState.st });
+    }
+    case "music": return renderMusic(N, t, dt);
+    case "screen": return renderScreen(N);
+    default: return fill(N, [0, 0, 0]);
+  }
+}
+const spd = () => Math.pow(S.speed / 50, 1.4);
+
+function finalize(cols, N) {
+  const out = new Uint8Array(N * 3), ord = ORDERS[S.order] || ORDERS.RGB, k = S.power ? S.brightness / 100 : 0;
+  for (let i = 0; i < N; i++) {
+    const c = cols[S.reverse ? N - 1 - i : i] || [0, 0, 0];
+    out[i * 3] = clamp(Math.round(c[ord[0]] * k), 0, 255);
+    out[i * 3 + 1] = clamp(Math.round(c[ord[1]] * k), 0, 255);
+    out[i * 3 + 2] = clamp(Math.round(c[ord[2]] * k), 0, 255);
+  }
+  return out;
+}
+
+let busy = false;
+async function tick() {
+  const now = performance.now() / 1000, dt = Math.min(0.25, now - lastT); lastT = now;
+  const N = clamp(S.ledCount | 0, 1, 253);
+  if (S.mode === "hardware") {
+    if (au.feedDevice && au.an && dev.connected && !paused) feedDevice(now);
+    current = []; drawStrip(); return;
+  }
+  current = renderFrame(N, now, dt);
+  drawStrip();
+  if (!dev.connected || paused || busy) return;
+  const out = finalize(current, N);
+  const key = out.join(",");
+  if (key === lastKey && now - lastSendT < 1) return; // nothing changed; resend once a second as keep-alive
+  busy = true;
+  try {
+    const groups = toGroups(out, N);
+    if (S.transport === "SC") { const f = scFrame(groups); sentBytes = f.length; await dev.send(f); }
+    else { sentBytes = 0; for (let i = 0; i < groups.length; i += 55) { const f = rbFrame(ACT.setSection, groups.slice(i, i + 55)); sentBytes += f.length; await dev.send(f); if (i + 55 < groups.length) await sleep(20); } }
+    lastKey = key; lastSendT = now; sentFrames++;
+  } finally { busy = false; }
+}
+
+// A worker drives the loop: page timers get throttled to 1/s when the window is minimized.
+const ticker = new Worker(URL.createObjectURL(new Blob(["let id;onmessage=e=>{clearInterval(id);id=setInterval(()=>postMessage(0),e.data)}"], { type: "text/javascript" })));
+ticker.onmessage = () => tick();
+const setFps = () => ticker.postMessage(Math.round(1000 / clamp(S.fps, 1, 60)));
+setInterval(() => { $("#statFps").textContent = `${sentFrames} fps sent`; $("#statBytes").textContent = `${sentBytes} B/frame`; sentFrames = 0; }, 1000);
+
+// ---------- drawing ----------
+function drawStrip() {
+  const cv = $("#strip"), w = cv.clientWidth; if (cv.width !== w) cv.width = w;
+  const g = cv.getContext("2d"), N = current.length, k = S.power ? S.brightness / 100 : 0;
+  g.fillStyle = "#000"; g.fillRect(0, 0, cv.width, cv.height);
+  if (!N) { g.fillStyle = "#8a91a0"; g.font = "12px system-ui"; g.fillText("Controller is running its own built-in effect", 10, 21); return; }
+  const cw = cv.width / N;
+  for (let i = 0; i < N; i++) { const c = current[i]; g.fillStyle = `rgb(${c[0] * k},${c[1] * k},${c[2] * k})`; g.fillRect(i * cw + 0.5, 4, Math.max(1, cw - 1), 26); }
+  if ($("#p-screen").classList.contains("active")) drawMonitor();
+}
+function drawMonitor() {
+  const cv = $("#monitor"), g = cv.getContext("2d"), W = cv.width, H = cv.height, pad = 34;
+  const sx = (x) => pad + x * (W - 2 * pad), sy = (y) => pad + y * (H - 2 * pad);
+  g.clearRect(0, 0, W, H);
+  g.fillStyle = "#14171d"; g.fillRect(sx(0), sy(0), W - 2 * pad, H - 2 * pad);
+  if (scr.canvas && scr.ctx) { g.globalAlpha = 0.55; g.drawImage(scr.canvas, sx(0), sy(0), W - 2 * pad, H - 2 * pad); g.globalAlpha = 1; }
+  g.strokeStyle = "#2a2f3a"; g.strokeRect(sx(0), sy(0), W - 2 * pad, H - 2 * pad);
+  const leds = layoutLeds(), k = S.power ? S.brightness / 100 : 0;
+  leds.forEach((l, i) => {
+    const off = 14, x = sx(l.cx) + (l.side === "left" ? -off : l.side === "right" ? off : 0), y = sy(l.cy) + (l.side === "top" ? -off : l.side === "bottom" ? off : 0);
+    const c = current[i] || [40, 40, 40];
+    g.beginPath(); g.arc(x, y, 4.5, 0, 7); g.fillStyle = `rgb(${c[0] * k},${c[1] * k},${c[2] * k})`; g.fill(); g.strokeStyle = "#333"; g.stroke();
+    if (i === 0) { g.fillStyle = "#fff"; g.font = "bold 12px system-ui"; g.fillText("1", x + 7, y + 4); }
+  });
+  const total = leds.length, N = S.ledCount;
+  $("#layoutWarn").textContent = total === N ? "" : `Layout has ${total} LEDs but the strip has ${N}.`;
+}
+
+// ---------- UI ----------
+function syncInputs() {
+  $$("[data-k]").forEach((el) => {
+    const v = getPath(S, el.dataset.k);
+    if (el.type === "checkbox") el.checked = !!v; else el.value = v;
+  });
+  $$("[data-o]").forEach((o) => (o.textContent = getPath(S, o.dataset.o)));
+  $("#powerBtn").textContent = S.power ? "⏻ On" : "⏻ Off";
+}
+$$("[data-k]").forEach((el) => {
+  el.addEventListener("input", () => {
+    const k = el.dataset.k;
+    let v = el.type === "checkbox" ? el.checked : el.type === "range" || el.type === "number" ? Number(el.value) : el.value;
+    setPath(S, k, v);
+    $$(`[data-o="${k}"]`).forEach((o) => (o.textContent = v));
+    if (k === "fps") setFps();
+    if (k === "color") setMode("static");
+    if (k.startsWith("grad")) setMode("gradient");
+    if (k === "eff1" || k === "eff2") setMode("effects");
+    if (k === "log" && !v) $("#log").textContent = "";
+    save();
+  });
+});
+
+function setMode(m) {
+  if (m === "hardware" && S.mode !== "hardware") S.prevMode = S.mode;
+  S.mode = m; save();
+  $("#statMode").textContent = "Mode: " + ({ static: "Static", gradient: "Gradient", effects: "Effects · " + (EFFECTS[S.effect]?.name || ""), music: "Music · " + MUSIC[S.music], screen: "Screen sync", hardware: "Hardware (built-in)" }[m] || m);
+  lastKey = "";
+}
+function showPanel(id) {
+  $$("section.panel").forEach((p) => p.classList.toggle("active", p.id === "p-" + id));
+  $$("nav button").forEach((b) => b.classList.toggle("active", (b.dataset.mode || b.dataset.tab) === id));
+}
+$$("nav button[data-mode]").forEach((b) => b.addEventListener("click", () => { S.tab = null; showPanel(b.dataset.mode); if (b.dataset.mode !== "screen" && b.dataset.mode !== "music") setMode(b.dataset.mode); else if (b.dataset.mode === "screen" && scr.ctx) setMode("screen"); else if (b.dataset.mode === "music" && au.an) setMode("music"); }));
+$$("nav button[data-tab]").forEach((b) => b.addEventListener("click", () => { S.tab = b.dataset.tab; showPanel(b.dataset.tab); }));
+
+// static swatches
+["#ff0000", "#ff6a00", "#ffd000", "#00ff40", "#00ffd5", "#0080ff", "#0000ff", "#8000ff", "#ff00c8", "#ffffff", "#ffb070"].forEach((c) => {
+  const s = document.createElement("div"); s.className = "swatch"; s.style.background = c; s.title = c;
+  s.onclick = () => { S.color = c; syncInputs(); setMode("static"); };
+  $("#swatches").appendChild(s);
+});
+// effect tiles
+function tiles(container, items, key, onPick) {
+  container.innerHTML = "";
+  for (const [id, name] of Object.entries(items)) {
+    const b = document.createElement("button"); b.className = "tile" + (S[key] === id ? " active" : ""); b.textContent = name;
+    b.onclick = () => { S[key] = id; [...container.children].forEach((x) => x.classList.toggle("active", x === b)); onPick(); };
+    container.appendChild(b);
+  }
+}
+tiles($("#effectGrid"), Object.fromEntries(Object.entries(EFFECTS).map(([k, v]) => [k, v.name])), "effect", () => setMode("effects"));
+tiles($("#musicGrid"), MUSIC, "music", () => { if (au.an) setMode("music"); else setMode(S.mode); });
+
+$("#musicStart").onclick = startMusicSource;
+$("#musicStop").onclick = () => { const hw = S.mode === "hardware"; stopMusic(); if (hw) setMode(S.prevMode || "effects"); };
+$("#musicSrc").addEventListener("change", () => { stopMusic(); if (S.mode === "hardware" || S.mode === "music") setMode(S.prevMode && S.prevMode !== "music" ? S.prevMode : "effects"); updateMusicUi(); });
+const stepDevMusic = (d) => { S.devMusicIdx = clamp(S.devMusicIdx + d, 0, 255); syncInputs(); save(); if (S.mode === "hardware") sendDeviceMusicEffect(); };
+$("#devMusicPrev").onclick = () => stepDevMusic(-1);
+$("#devMusicNext").onclick = () => stepDevMusic(1);
+$('[data-k="devMusicIdx"]').addEventListener("change", () => { if (S.mode === "hardware") sendDeviceMusicEffect(); });
+updateMusicUi();
+$("#screenStart").onclick = startScreen;
+$("#screenStop").onclick = stopScreen;
+$("#auto3").onclick = () => autoLayout(3);
+$("#auto4").onclick = () => autoLayout(4);
+$("#testFirst").onclick = () => {
+  override = (N) => Array.from({ length: N }, (_, i) => (i < 5 ? [255, 255, 255] : i === N - 1 ? [255, 0, 0] : [0, 0, 0]));
+  lastKey = ""; setTimeout(() => { override = null; lastKey = ""; }, 3000);
+};
+$("#powerBtn").onclick = () => { S.power = !S.power; syncInputs(); save(); lastKey = ""; };
+
+// hardware
+const hwSend = (bytes) => dev.connected && dev.send(bytes);
+$("#hwEffect").onclick = () => { setMode("hardware"); hwSend(rbFrame(ACT.setLedEffect, [+$("#hwType").value & 255, +$("#hwIndex").value & 255])); };
+$("#hwPrev").onclick = () => { $("#hwIndex").value = Math.max(0, +$("#hwIndex").value - 1); $("#hwEffect").click(); };
+$("#hwNext").onclick = () => { $("#hwIndex").value = +$("#hwIndex").value + 1; $("#hwEffect").click(); };
+const hwSlider = (id, act) => { $(id).oninput = () => { $(id + "O").textContent = $(id).value; hwSend(rbFrame(act, [+$(id).value])); }; };
+hwSlider("#hwBright", ACT.brightness); hwSlider("#hwSpeed", ACT.speed); hwSlider("#hwSens", ACT.soundSens);
+$("#hwOff").onclick = () => { setMode("hardware"); hwSend(rbFrame(ACT.off)); };
+$("#hwResume").onclick = () => { setMode(S.prevMode || "effects"); };
+$("#readInfo").onclick = async () => {
+  if (!dev.connected) return log("not connected");
+  paused = true; const info = await dev.readInfo(); paused = false;
+  log("device info: " + JSON.stringify(info));
+  if (!S.log) alert(info ? JSON.stringify(info, null, 1) : "No reply");
+};
+
+// connection
+$("#connectBtn").onclick = async () => {
+  if (!("serial" in navigator)) return;
+  if (dev.connected) { await dev.close(); setConn(false, "Not connected"); return; }
+  try { const port = await navigator.serial.requestPort({ filters: [FILTER] }); await connect(port); }
+  catch (e) { if (e.name !== "NotFoundError") setConn(false, e.message); }
+};
+if ("serial" in navigator) {
+  navigator.serial.addEventListener("disconnect", (e) => { if (e.target === dev.port || e.port === dev.port) { dev.close(); setConn(false, "Unplugged"); } });
+  navigator.serial.addEventListener("connect", async () => { if (!dev.connected) autoConnect(); });
+  async function autoConnect() {
+    const ports = await navigator.serial.getPorts();
+    const p = ports.find((x) => { const i = x.getInfo(); return i.usbVendorId === FILTER.usbVendorId && i.usbProductId === FILTER.usbProductId; });
+    if (p) await connect(p);
+  }
+  autoConnect();
+} else {
+  $("#noSerial").style.display = "block";
+  $("#connectBtn").disabled = true;
+}
+window.addEventListener("beforeunload", () => { dev.close(); });
+
+// start
+if (S.mode === "music" || S.mode === "screen" || S.mode === "hardware") S.mode = "effects"; // capture needs a click after reload
+S.tab = null;
+syncInputs();
+showPanel(S.mode);
+setMode(S.mode);
+setFps();
+</script>
+</body>
+</html>
