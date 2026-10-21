@@ -25,7 +25,7 @@ music mode only listens to the controller's own microphone. The goal was to get 
 To stop it, close the app window and the minimized "OpenDX server" window.
 To keep DX Light from coming back, disable it in Task Manager > Startup apps.
 
-## What we found (summary)
+## What i found (summary)
 
 Full details, with byte layouts, are in [DX-Light-protocol.md](DX-Light-protocol.md).
 
